@@ -2,6 +2,8 @@ import logging
 import threading
 import os
 import asyncio
+import sqlite3
+from datetime import datetime
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -23,10 +25,8 @@ REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
 ADMIN_NUMERIC_ID = 6081001025
 LOG_CHANNEL_ID = ADMIN_NUMERIC_ID
+DB_FILE = "raxiwin.db"
 # ==========================================
-
-known_users = set()
-user_langs = {}
 
 CHOOSE_LANG, ASK_GAME_ID, ASK_TEAM_STATUS, DEPOSIT_MENU, DEPOSIT_HELP, WITHDRAW_HELP, HUMAN_AGENT, BROADCAST_MSG = range(8)
 
@@ -41,24 +41,74 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # ==========================================
-# TRANSLATIONS
+# DATABASE SETUP
+# ==========================================
+def init_db():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute('''CREATE TABLE IF NOT EXISTS users (
+        user_id INTEGER PRIMARY KEY,
+        username TEXT,
+        first_name TEXT,
+        language TEXT DEFAULT 'en',
+        joined_at TEXT
+    )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS stats (
+        key TEXT PRIMARY KEY,
+        value INTEGER DEFAULT 0
+    )''')
+    conn.commit()
+    conn.close()
+
+def save_user(user_id, username, first_name):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
+    exists = c.fetchone()
+    if not exists:
+        c.execute("INSERT INTO users (user_id, username, first_name, language, joined_at) VALUES (?, ?, ?, 'en', ?)",
+                  (user_id, username or "", first_name or "", datetime.now().strftime("%Y-%m-%d %H:%M")))
+    conn.commit()
+    conn.close()
+    return not exists  # True if new user
+
+def get_user_lang(user_id):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT language FROM users WHERE user_id = ?", (user_id,))
+    row = c.fetchone()
+    conn.close()
+    return row[0] if row else "en"
+
+def set_user_lang(user_id, lang):
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("UPDATE users SET language = ? WHERE user_id = ?", (lang, user_id))
+    conn.commit()
+    conn.close()
+
+def get_all_user_ids():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT user_id FROM users")
+    rows = c.fetchall()
+    conn.close()
+    return [r[0] for r in rows]
+
+def count_users():
+    conn = sqlite3.connect(DB_FILE)
+    c = conn.cursor()
+    c.execute("SELECT COUNT(*) FROM users")
+    count = c.fetchone()[0]
+    conn.close()
+    return count
+
+# ==========================================
+# TRANSLATIONS (Same as before)
 # ==========================================
 TEXTS = {
-    "choose_lang": {
-        "en": "🌐 *Please choose your language:*\n\n🇬🇧 English\n🇮🇳 हिंदी\n🇮🇳 తెలుగు",
-        "hi": "🌐 *कृपया अपनी भाषा चुनें:*\n\n🇬🇧 English\n🇮🇳 हिंदी\n🇮🇳 తెలుగు",
-        "te": "🌐 *దయచేసి మీ భాషను ఎంచుకోండి:*\n\n🇬🇧 English\n🇮🇳 हिंदी\n🇮🇳 తెలుగు"
-    },
-    "lang_set": {
-        "en": "✅ Language set to English!",
-        "hi": "✅ भाषा हिंदी में सेट हो गई!",
-        "te": "✅ భాష తెలుగులో సెట్ చేయబడింది!"
-    },
-    "welcome": {
-        "en": "👋 Welcome to RaxiWin Support! How can we help you today?",
-        "hi": "👋 RaxiWin सपोर्ट में आपका स्वागत है! हम आपकी कैसे मदद कर सकते हैं?",
-        "te": "👋 RaxiWin సపోర్ట్‌కు స్వాగతం! మేము మీకు ఎలా సహాయం చేయగలము?"
-    },
+    "lang_set": {"en": "✅ Language set to English!", "hi": "✅ भाषा हिंदी में सेट हो गई!", "te": "✅ భాష తెలుగులో సెట్ చేయబడింది!"},
+    "welcome": {"en": "👋 Welcome to RaxiWin Support! How can we help you today?", "hi": "👋 RaxiWin सपोर्ट में आपका स्वागत है! हम आपकी कैसे मदद कर सकते हैं?", "te": "👋 RaxiWin సపోర్ట్‌కు స్వాగతం! మేము మీకు ఎలా సహాయం చేయగలము?"},
     "btn_gift": {"en": "🎁 Daily Gift Code", "hi": "🎁 डेली गिफ्ट कोड", "te": "🎁 డైలీ గిఫ్ట్ కోడ్"},
     "btn_referral": {"en": "🔗 My Referral Link", "hi": "🔗 मेरा रेफरल लिंक", "te": "🔗 నా రెఫరల్ లింక్"},
     "btn_deposit": {"en": "💳 Deposit / Withdraw Help", "hi": "💳 डिपॉजिट / विड्रॉ हेल्प", "te": "💳 డిపాజిట్ / విత్‌డ్రా సహాయం"},
@@ -73,124 +123,36 @@ TEXTS = {
     "btn_with_issue": {"en": "🏧 Withdrawal Issue", "hi": "🏧 विड्रॉ समस्या", "te": "🏧 విత్‌డ్రా సమస్య"},
     "btn_solved": {"en": "✅ Yes, solved", "hi": "✅ हाँ, हल हो गया", "te": "✅ అవును, పరిష్కరించబడింది"},
     "btn_human_contact": {"en": "❌ No, contact Human", "hi": "❌ नहीं, ह्यूमन से संपर्क करें", "te": "❌ కాదు, మానవుడిని సంప్రదించండి"},
-    "gift_prompt": {
-        "en": "🎁 *Daily Gift Code*\n\nSend me your *Game ID*.\n\nType it or send a screenshot.",
-        "hi": "🎁 *डेली गिफ्ट कोड*\n\nमुझे अपनी *गेम आईडी* भेजें।\n\nटाइप करें या स्क्रीनशॉट भेजें।",
-        "te": "🎁 *డైలీ గిఫ్ట్ కోడ్*\n\nమీ *గేమ్ ID* పంపండి.\n\nటైప్ చేయండి లేదా స్క్రీన్‌షాట్ పంపండి."
-    },
-    "gift_received": {
-        "en": "Thank you! Received: `{data}`\n\nIs this ID registered under our team?",
-        "hi": "धन्यवाद! मिला: `{data}`\n\nक्या यह आईडी हमारी टीम में है?",
-        "te": "ధన్యవాదాలు! అందింది: `{data}`\n\nఈ ID మా టీమ్‌లో ఉందా?"
-    },
-    "gift_verified": {
-        "en": "✅ *Verified Team Member!*\n\nContact admin:\n\n👤 {admin}\n🆔 `{id}`\n\nSend your ID to claim gift code.",
-        "hi": "✅ *सत्यापित टीम सदस्य!*\n\nएडमिन से संपर्क करें:\n\n👤 {admin}\n🆔 `{id}`\n\nगिफ्ट कोड के लिए ID भेजें।",
-        "te": "✅ *ధృవీకరించబడిన సభ్యుడు!*\n\nఅడ్మిన్‌ను సంప్రదించండి:\n\n👤 {admin}\n🆔 `{id}`\n\nగిఫ్ట్ కోడ్ కోసం ID పంపండి."
-    },
-    "gift_not_reg": {
-        "en": "❌ *Not Registered*\n\nRegister first:\n\n🔗 {link}\n\nThen click /start.",
-        "hi": "❌ *रजिस्टर्ड नहीं*\n\nपहले रजिस्टर करें:\n\n🔗 {link}\n\nफिर /start क्लिक करें।",
-        "te": "❌ *రిజిస్టర్ కాలేదు*\n\nమొదట రిజిస్టర్ చేయండి:\n\n🔗 {link}\n\nతర్వాత /start క్లిక్ చేయండి."
-    },
-    "referral": {
-        "en": "🔗 *Your Referral Link:*\n\n{link}\n\nShare to earn bonuses!",
-        "hi": "🔗 *आपका रेफरल लिंक:*\n\n{link}\n\nबोनस कमाने के लिए शेयर करें!",
-        "te": "🔗 *మీ రెఫరల్ లింక్:*\n\n{link}\n\nబోనస్ కోసం షేర్ చేయండి!"
-    },
-    "faq": {
-        "en": "❓ *FAQ:*\n\n1. *Login?* - Phone/email\n2. *Password?* - Letters & numbers only\n3. *Withdraw?* - Wallet > Payout",
-        "hi": "❓ *सामान्य प्रश्न:*\n\n1. *लॉगिन?* - फ़ोन/ईमेल\n2. *पासवर्ड?* - अक्षर और नंबर\n3. *विड्रॉ?* - वॉलेट > पेआउट",
-        "te": "❓ *FAQ:*\n\n1. *లాగిన్?* - ఫోన్/ఇమెయిల్\n2. *పాస్‌వర్డ్?* - అక్షరాలు & నంబర్లు\n3. *విత్‌డ్రా?* - వాలెట్ > పేఅవుట్"
-    },
-    "dep_menu": {
-        "en": "💳 *Deposit / Withdraw Help*\n\nChoose issue:",
-        "hi": "💳 *डिपॉजिट / विड्रॉ हेल्प*\n\nसमस्या चुनें:",
-        "te": "💳 *డిపాజిట్ / విత్‌డ్రా సహాయం*\n\nసమస్య ఎంచుకోండి:"
-    },
-    "dep_trouble": {
-        "en": "💵 *Deposit Issue:*\n\n1. Wallet\n2. UPI/Bank\n3. Min ₹100\n4. Wait 5-10 mins\n\nSolved?",
-        "hi": "💵 *डिपॉजिट समस्या:*\n\n1. वॉलेट\n2. UPI/बैंक\n3. न्यूनतम ₹100\n4. 5-10 मिनट\n\nहल हुई?",
-        "te": "💵 *డిపాజిట్ సమస్య:*\n\n1. వాలెట్\n2. UPI/బ్యాంక్\n3. కనీసం ₹100\n4. 5-10 నిమిషాలు\n\nపరిష్కారమైందా?"
-    },
-    "with_trouble": {
-        "en": "🏧 *Withdrawal Issue:*\n\n1. Wallet > Payout\n2. Bind Bank/UPI\n3. Min ₹200\n4. Wait 30 mins\n\nSolved?",
-        "hi": "🏧 *विड्रॉ समस्या:*\n\n1. वॉलेट > पेआउट\n2. बैंक/UPI बांधें\n3. न्यूनतम ₹200\n4. 30 मिनट\n\nहल हुई?",
-        "te": "🏧 *విత్‌డ్రా సమస్య:*\n\n1. వాలెట్ > పేఅవుట్\n2. బ్యాంక్/UPI బైండ్\n3. కనీసం ₹200\n4. 30 నిమిషాలు\n\nపరిష్కారమైందా?"
-    },
-    "solved": {
-        "en": "🎉 Great! /start for anything else.",
-        "hi": "🎉 बहुत बढ़िया! /start करें।",
-        "te": "🎉 అద్భుతం! /start చేయండి."
-    },
-    "human_required": {
-        "en": "💬 *Human Support*\n\nContact admin:\n\n👤 {admin}\n\nSend a screenshot of your issue.",
-        "hi": "💬 *ह्यूमन सपोर्ट*\n\nएडमिन से संपर्क करें:\n\n👤 {admin}\n\nसमस्या का स्क्रीनशॉट भेजें।",
-        "te": "💬 *మానవ సహాయం*\n\nఅడ్మిన్‌ను సంప్రదించండి:\n\n👤 {admin}\n\nసమస్య స్క్రీన్‌షాట్ పంపండి."
-    },
-    "human_prompt": {
-        "en": "💬 *Talk to Human Agent*\n\nDescribe your issue below. You can also send a screenshot.",
-        "hi": "💬 *ह्यूमन एजेंट से बात करें*\n\nसमस्या बताएं। स्क्रीनशॉट भी भेज सकते हैं।",
-        "te": "💬 *మానవ ఏజెంట్‌తో మాట్లాడండి*\n\nమీ సమస్యను వివరించండి. స్క్రీన్‌షాట్ కూడా పంపవచ్చు."
-    },
-    "human_received": {
-        "en": "✅ *Issue Received*\n\n`{data}`\n\nContact admin:\n\n👤 {admin}",
-        "hi": "✅ *समस्या मिली*\n\n`{data}`\n\nएडमिन से संपर्क करें:\n\n👤 {admin}",
-        "te": "✅ *సమస్య అందింది*\n\n`{data}`\n\nఅడ్మిన్‌ను సంప్రదించండి:\n\n👤 {admin}"
-    },
-    "kw_unknown": {
-        "en": "🤔 I didn't understand. Try keywords:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus\n\nOr use the menu.",
-        "hi": "🤔 समझ नहीं आया। कीवर्ड आज़माएं:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus\n\nया मेनू उपयोग करें।",
-        "te": "🤔 అర్థం కాలేదు. కీవర్డ్‌లు ప్రయత్నించండి:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus\n\nలేదా మెనూ వాడండి."
-    },
+    "gift_prompt": {"en": "🎁 *Daily Gift Code*\n\nSend me your *Game ID*.", "hi": "🎁 *डेली गिफ्ट कोड*\n\nअपनी *गेम आईडी* भेजें।", "te": "🎁 *డైలీ గిఫ్ట్ కోడ్*\n\nమీ *గేమ్ ID* పంపండి."},
+    "gift_received": {"en": "Thank you! Received: `{data}`\n\nIs this ID registered under our team?", "hi": "धन्यवाद! मिला: `{data}`\n\nक्या यह आईडी हमारी टीम में है?", "te": "ధన్యవాదాలు! అందింది: `{data}`\n\nఈ ID మా టీమ్‌లో ఉందా?"},
+    "gift_verified": {"en": "✅ *Verified Team Member!*\n\nContact admin: {admin}\n🆔 `{id}`", "hi": "✅ *सत्यापित सदस्य!*\n\nएडमिन: {admin}\n🆔 `{id}`", "te": "✅ *ధృవీకరించబడిన సభ్యుడు!*\n\nఅడ్మిన్: {admin}\n🆔 `{id}`"},
+    "gift_not_reg": {"en": "❌ *Not Registered*\n\nRegister: {link}", "hi": "❌ *रजिस्टर्ड नहीं*\n\nरजिस्टर: {link}", "te": "❌ *రిజిస్టర్ కాలేదు*\n\nరిజిస్టర్: {link}"},
+    "referral": {"en": "🔗 *Your Referral Link:*\n\n{link}", "hi": "🔗 *आपका रेफरल लिंक:*\n\n{link}", "te": "🔗 *మీ రెఫరల్ లింక్:*\n\n{link}"},
+    "faq": {"en": "❓ *FAQ:*\n\n1. *Login?* - Phone/email\n2. *Password?* - Letters & numbers\n3. *Withdraw?* - Wallet > Payout", "hi": "❓ *सामान्य प्रश्न:*\n\n1. *लॉगिन?* - फ़ोन/ईमेल\n2. *पासवर्ड?* - अक्षर और नंबर\n3. *विड्रॉ?* - वॉलेट > पेआउट", "te": "❓ *FAQ:*\n\n1. *లాగిన్?* - ఫోన్/ఇమెయిల్\n2. *పాస్‌వర్డ్?* - అక్షరాలు & నంబర్లు\n3. *విత్‌డ్రా?* - వాలెట్ > పేఅవుట్"},
+    "dep_menu": {"en": "💳 *Deposit / Withdraw Help*\n\nChoose:", "hi": "💳 *डिपॉजिट / विड्रॉ*\n\nचुनें:", "te": "💳 *డిపాజిట్ / విత్‌డ్రా*\n\nఎంచుకోండి:"},
+    "dep_trouble": {"en": "💵 *Deposit:*\n1. Wallet\n2. UPI/Bank\n3. Min ₹100\n4. Wait 5-10 mins\n\nSolved?", "hi": "💵 *डिपॉजिट:*\n1. वॉलेट\n2. UPI/बैंक\n3. न्यूनतम ₹100\n4. 5-10 मिनट\n\nहल हुई?", "te": "💵 *డిపాజిట్:*\n1. వాలెట్\n2. UPI/బ్యాంక్\n3. కనీసం ₹100\n4. 5-10 నిమిషాలు\n\nపరిష్కారమైందా?"},
+    "with_trouble": {"en": "🏧 *Withdrawal:*\n1. Wallet > Payout\n2. Bank/UPI\n3. Min ₹200\n4. Wait 30 mins\n\nSolved?", "hi": "🏧 *विड्रॉ:*\n1. वॉलेट > पेआउट\n2. बैंक/UPI\n3. न्यूनतम ₹200\n4. 30 मिनट\n\nहल हुई?", "te": "🏧 *విత్‌డ్రా:*\n1. వాలెట్ > పేఅవుట్\n2. బ్యాంక్/UPI\n3. కనీసం ₹200\n4. 30 నిమిషాలు\n\nపరిష్కారమైందా?"},
+    "solved": {"en": "🎉 Great! /start for more.", "hi": "🎉 बढ़िया! /start करें।", "te": "🎉 అద్భుతం! /start చేయండి."},
+    "human_required": {"en": "💬 *Human Support*\n\nContact: {admin}", "hi": "💬 *ह्यूमन सपोर्ट*\n\nसंपर्क: {admin}", "te": "💬 *మానవ సహాయం*\n\nసంప్రదించండి: {admin}"},
+    "human_prompt": {"en": "💬 *Talk to Human Agent*\n\nDescribe your issue below.", "hi": "💬 *ह्यूमन एजेंट*\n\nसमस्या बताएं।", "te": "💬 *మానవ ఏజెంట్*\n\nమీ సమస్యను వివరించండి."},
+    "human_received": {"en": "✅ *Received*\n\n`{data}`\n\nContact: {admin}", "hi": "✅ *मिला*\n\n`{data}`\n\nसंपर्क: {admin}", "te": "✅ *అందింది*\n\n`{data}`\n\nసంప్రదించండి: {admin}"},
+    "kw_unknown": {"en": "🤔 Try keywords:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus", "hi": "🤔 कीवर्ड आज़माएं:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus", "te": "🤔 కీవర్డ్‌లు:\n\n• otp\n• password\n• withdraw\n• deposit\n• login\n• register\n• bonus"},
     "kw_otp_title": {"en": "📩 OTP Not Received?", "hi": "📩 OTP नहीं आया?", "te": "📩 OTP రాలేదా?"},
-    "kw_otp_body": {
-        "en": "Try:\n\n1️⃣ Wait 60 seconds\n2️⃣ Check network\n3️⃣ Restart phone\n4️⃣ Don't request 3+ times\n\nStill not received? {admin}",
-        "hi": "यह करें:\n\n1️⃣ 60 सेकंड प्रतीक्षा\n2️⃣ नेटवर्क जांचें\n3️⃣ फ़ोन रीस्टार्ट\n4️⃣ 3+ बार न मांगें\n\nफिर भी नहीं आया? {admin}",
-        "te": "ఇది చేయండి:\n\n1️⃣ 60 సెకన్లు వేచి ఉండండి\n2️⃣ నెట్‌వర్క్ చూడండి\n3️⃣ ఫోన్ రీస్టార్ట్\n4️⃣ 3+ సార్లు అడగవద్దు\n\nఇంకా రాలేదా? {admin}"
-    },
-    "kw_pwd_title": {"en": "🔑 Password Help", "hi": "🔑 पासवर्ड मदद", "te": "🔑 పాస్‌వర్డ్ సహాయం"},
-    "kw_pwd_body": {
-        "en": "Password must contain:\n\n✅ Capital (A-Z)\n✅ Small (a-z)\n✅ Numbers (0-9)\n\n❌ NO symbols @ # $ % & !",
-        "hi": "पासवर्ड में होना चाहिए:\n\n✅ बड़े (A-Z)\n✅ छोटे (a-z)\n✅ नंबर (0-9)\n\n❌ चिन्ह @ # $ % & ! नहीं",
-        "te": "పాస్‌వర్డ్‌లో ఉండాలి:\n\n✅ పెద్ద (A-Z)\n✅ చిన్న (a-z)\n✅ నంబర్లు (0-9)\n\n❌ చిహ్నాలు @ # $ % & ! వద్దు"
-    },
-    "kw_with_title": {"en": "🏧 Withdrawal Guide", "hi": "🏧 विड्रॉ गाइड", "te": "🏧 విత్‌డ్రా గైడ్"},
-    "kw_with_body": {
-        "en": "1️⃣ Login\n2️⃣ Wallet → Payout\n3️⃣ Bank/UPI ID\n4️⃣ Amount (Min ₹200)\n5️⃣ Submit\n\n⚡ 10-30 mins.\n\nPending? {admin}",
-        "hi": "1️⃣ लॉगिन\n2️⃣ वॉलेट → पेआउट\n3️⃣ बैंक/UPI\n4️⃣ राशि (न्यूनतम ₹200)\n5️⃣ सबमिट\n\n⚡ 10-30 मिनट।\n\nपेंडिंग? {admin}",
-        "te": "1️⃣ లాగిన్\n2️⃣ వాలెట్ → పేఅవుట్\n3️⃣ బ్యాంక్/UPI\n4️⃣ మొత్తం (కనీసం ₹200)\n5️⃣ సబ్మిట్\n\n⚡ 10-30 నిమిషాలు.\n\nపెండింగ్? {admin}"
-    },
-    "kw_dep_title": {"en": "💵 Deposit Guide", "hi": "💵 डिपॉजिट गाइड", "te": "💵 డిపాజిట్ గైడ్"},
-    "kw_dep_body": {
-        "en": "1️⃣ Login\n2️⃣ Wallet → Deposit\n3️⃣ UPI/Bank\n4️⃣ Amount (Min ₹100)\n5️⃣ Pay\n\n⏱️ 5-10 mins.\n\nNot credited? {admin}",
-        "hi": "1️⃣ लॉगिन\n2️⃣ वॉलेट → डिपॉजिट\n3️⃣ UPI/बैंक\n4️⃣ राशि (न्यूनतम ₹100)\n5️⃣ भुगतान\n\n⏱️ 5-10 मिनट।\n\nक्रेडिट नहीं? {admin}",
-        "te": "1️⃣ లాగిన్\n2️⃣ వాలెట్ → డిపాజిట్\n3️⃣ UPI/బ్యాంక్\n4️⃣ మొత్తం (కనీసం ₹100)\n5️⃣ పే\n\n⏱️ 5-10 నిమిషాలు.\n\nక్రెడిట్ కాలేదా? {admin}"
-    },
-    "kw_login_title": {"en": "🔓 Login Help", "hi": "🔓 लॉगिन मदद", "te": "🔓 లాగిన్ సహాయం"},
-    "kw_login_body": {
-        "en": "1️⃣ Open app\n2️⃣ Login\n3️⃣ Phone/email\n4️⃣ Password\n5️⃣ OTP\n\nCan't login? Reset password.",
-        "hi": "1️⃣ ऐप खोलें\n2️⃣ लॉगिन\n3️⃣ फ़ोन/ईमेल\n4️⃣ पासवर्ड\n5️⃣ OTP\n\nलॉगिन नहीं? पासवर्ड रीसेट करें।",
-        "te": "1️⃣ యాప్ తెరవండి\n2️⃣ లాగిన్\n3️⃣ ఫోన్/ఇమెయిల్\n4️⃣ పాస్‌వర్డ్\n5️⃣ OTP\n\nలాగిన్ కాదా? పాస్‌వర్డ్ రీసెట్."
-    },
-    "kw_reg_title": {"en": "📝 Registration Help", "hi": "📝 रजिस्ट्रेशन मदद", "te": "📝 రిజిస్ట్రేషన్ సహాయం"},
-    "kw_reg_body": {
-        "en": "1️⃣ {link}\n2️⃣ Phone number\n3️⃣ Password\n4️⃣ Code: 74158275546\n5️⃣ Done",
-        "hi": "1️⃣ {link}\n2️⃣ फ़ोन नंबर\n3️⃣ पासवर्ड\n4️⃣ कोड: 74158275546\n5️⃣ पूरा",
-        "te": "1️⃣ {link}\n2️⃣ ఫోన్ నంబర్\n3️⃣ పాస్‌వర్డ్\n4️⃣ కోడ్: 74158275546\n5️⃣ పూర్తి"
-    },
-    "kw_bonus_title": {"en": "🎁 Today's Bonus", "hi": "🎁 आज का बोनस", "te": "🎁 ఈరోజు బోనస్"},
-    "kw_bonus_body": {
-        "en": "Code:\n\n`{code}`\n\nRedeem in game's Bonus section.\n\n⚠️ 24 hours only.",
-        "hi": "कोड:\n\n`{code}`\n\nगेम के Bonus सेक्शन में रिडीम करें।\n\n⚠️ 24 घंटे मान्य।",
-        "te": "కోడ్:\n\n`{code}`\n\nగేమ్ Bonus సెక్షన్‌లో రీడీమ్.\n\n⚠️ 24 గంటలు మాత్రమే."
-    },
-    "kw_help_title": {"en": "🆘 Need Help?", "hi": "🆘 मदद चाहिए?", "te": "🆘 సహాయం కావాలా?"},
-    "kw_help_body": {
-        "en": "I help with:\n\n• Login/Register\n• Deposit/Withdraw\n• OTP\n• Password\n• Gift codes\n\nType a keyword or use menu.",
-        "hi": "मैं मदद करता हूँ:\n\n• लॉगिन/रजिस्टर\n• डिपॉजिट/विड्रॉ\n• OTP\n• पासवर्ड\n• गिफ्ट कोड\n\nकीवर्ड टाइप करें या मेनू।",
-        "te": "నేను సహాయం చేస్తాను:\n\n• లాగిన్/రిజిస్టర్\n• డిపాజిట్/విత్‌డ్రా\n• OTP\n• పాస్‌వర్డ్\n• గిఫ్ట్ కోడ్‌లు\n\nకీవర్డ్ టైప్ లేదా మెనూ."
-    },
+    "kw_otp_body": {"en": "1️⃣ Wait 60 sec\n2️⃣ Check network\n3️⃣ Restart phone\n\nStill? {admin}", "hi": "1️⃣ 60 सेकंड\n2️⃣ नेटवर्क\n3️⃣ रीस्टार्ट\n\nफिर भी? {admin}", "te": "1️⃣ 60 సెకన్లు\n2️⃣ నెట్‌వర్క్\n3️⃣ రీస్టార్ట్\n\nఇంకా? {admin}"},
+    "kw_pwd_title": {"en": "🔑 Password Help", "hi": "🔑 पासवर्ड", "te": "🔑 పాస్‌వర్డ్"},
+    "kw_pwd_body": {"en": "✅ Capital (A-Z)\n✅ Small (a-z)\n✅ Numbers (0-9)\n❌ NO symbols", "hi": "✅ बड़े (A-Z)\n✅ छोटे (a-z)\n✅ नंबर (0-9)\n❌ चिन्ह नहीं", "te": "✅ పెద్ద (A-Z)\n✅ చిన్న (a-z)\n✅ నంబర్లు (0-9)\n❌ చిహ్నాలు వద్దు"},
+    "kw_with_title": {"en": "🏧 Withdrawal", "hi": "🏧 विड्रॉ", "te": "🏧 విత్‌డ్రా"},
+    "kw_with_body": {"en": "1. Login\n2. Wallet > Payout\n3. Bank/UPI\n4. Min ₹200\n5. Submit", "hi": "1. लॉगिन\n2. वॉलेट > पेआउट\n3. बैंक/UPI\n4. ₹200\n5. सबमिट", "te": "1. లాగిన్\n2. వాలెట్ > పేఅవుట్\n3. బ్యాంక్/UPI\n4. ₹200\n5. సబ్మిట్"},
+    "kw_dep_title": {"en": "💵 Deposit", "hi": "💵 डिपॉजिट", "te": "💵 డిపాజిట్"},
+    "kw_dep_body": {"en": "1. Login\n2. Wallet > Deposit\n3. UPI/Bank\n4. Min ₹100", "hi": "1. लॉगिन\n2. वॉलेट > डिपॉजिट\n3. UPI/बैंक\n4. ₹100", "te": "1. లాగిన్\n2. వాలెట్ > డిపాజిట్\n3. UPI/బ్యాంక్\n4. ₹100"},
+    "kw_login_title": {"en": "🔓 Login", "hi": "🔓 लॉगिन", "te": "🔓 లాగిన్"},
+    "kw_login_body": {"en": "1. Open app\n2. Login\n3. Phone/email\n4. Password\n5. OTP", "hi": "1. ऐप\n2. लॉगिन\n3. फ़ोन\n4. पासवर्ड\n5. OTP", "te": "1. యాప్\n2. లాగిన్\n3. ఫోన్\n4. పాస్‌వర్డ్\n5. OTP"},
+    "kw_reg_title": {"en": "📝 Register", "hi": "📝 रजिस्टर", "te": "📝 రిజిస్టర్"},
+    "kw_reg_body": {"en": "1. {link}\n2. Phone\n3. Password\n4. Code: 74158275546", "hi": "1. {link}\n2. फ़ोन\n3. पासवर्ड\n4. कोड: 74158275546", "te": "1. {link}\n2. ఫోన్\n3. పాస్‌వర్డ్\n4. కోడ్: 74158275546"},
+    "kw_bonus_title": {"en": "🎁 Bonus", "hi": "🎁 बोनस", "te": "🎁 బోనస్"},
+    "kw_bonus_body": {"en": "Code:\n`{code}`\n\n24 hours only.", "hi": "कोड:\n`{code}`\n\n24 घंटे।", "te": "కోడ్:\n`{code}`\n\n24 గంటలు."},
+    "kw_help_title": {"en": "🆘 Help", "hi": "🆘 मदद", "te": "🆘 సహాయం"},
+    "kw_help_body": {"en": "Login, Deposit, Withdraw, OTP, Password, Gift codes.", "hi": "लॉगिन, डिपॉजिट, विड्रॉ, OTP, पासवर्ड, गिफ्ट।", "te": "లాగిన్, డిపాజిట్, విత్‌డ్రా, OTP, పాస్‌వర్డ్, గిఫ్ట్."},
 }
 
 
@@ -202,10 +164,6 @@ def t(key, lang, **kwargs):
         except:
             return text
     return text
-
-
-def get_lang(user_id):
-    return user_langs.get(user_id, "en")
 
 
 async def log_to_channel(bot, message: str):
@@ -234,7 +192,7 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     query = update.callback_query
     await query.answer()
     lang = query.data.split('_')[1]
-    user_langs[query.from_user.id] = lang
+    set_user_lang(query.from_user.id, lang)
     await query.edit_message_text(t("lang_set", lang), parse_mode='Markdown')
     await main_menu(update, context)
     return ASK_GAME_ID
@@ -242,11 +200,8 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 
 # --- MAIN MENU ---
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    if update.effective_user:
-        user_id = update.effective_user.id
-    else:
-        user_id = update.callback_query.from_user.id
-    lang = get_lang(user_id)
+    user_id = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
+    lang = get_user_lang(user_id)
     
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
@@ -267,16 +222,16 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
-    is_new = user.id not in known_users
-    known_users.add(user.id)
+    is_new = save_user(user.id, user.username, user.first_name)
+    
     if is_new:
         await log_to_channel(context.bot,
-            f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{len(known_users)}`")
+            f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
+        return await language_selection(update, context)
     
-    if user.id in user_langs:
-        await main_menu(update, context)
-        return ASK_GAME_ID
-    return await language_selection(update, context)
+    # Existing user - go straight to menu
+    await main_menu(update, context)
+    return ASK_GAME_ID
 
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -289,8 +244,8 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     text = update.message.text.lower()
     user = update.effective_user
-    lang = get_lang(user.id)
-    known_users.add(user.id)
+    lang = get_user_lang(user.id)
+    save_user(user.id, user.username, user.first_name)
     admin = ADMIN_ID
     
     if "otp" in text:
@@ -298,9 +253,9 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif "password" in text:
         reply = f"🔑 *{t('kw_pwd_title', lang)}*\n\n{t('kw_pwd_body', lang)}"
     elif "withdraw" in text:
-        reply = f"🏧 *{t('kw_with_title', lang)}*\n\n{t('kw_with_body', lang, admin=admin)}"
+        reply = f"🏧 *{t('kw_with_title', lang)}*\n\n{t('kw_with_body', lang)}"
     elif "deposit" in text:
-        reply = f"💵 *{t('kw_dep_title', lang)}*\n\n{t('kw_dep_body', lang, admin=admin)}"
+        reply = f"💵 *{t('kw_dep_title', lang)}*\n\n{t('kw_dep_body', lang)}"
     elif "login" in text:
         reply = f"🔓 *{t('kw_login_title', lang)}*\n\n{t('kw_login_body', lang)}"
     elif "register" in text:
@@ -321,10 +276,11 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 
+# --- ADMIN COMMANDS ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         return ConversationHandler.END
-    await update.message.reply_text(f"📢 Broadcast Mode\n👥 Total: `{len(known_users)}`\n\nSend the message.", parse_mode='Markdown')
+    await update.message.reply_text(f"📢 Broadcast Mode\n👥 Total: `{count_users()}`\n\nSend the message.", parse_mode='Markdown')
     return BROADCAST_MSG
 
 
@@ -332,13 +288,14 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         return ConversationHandler.END
     message = update.message
-    total = len(known_users)
+    user_ids = get_all_user_ids()
+    total = len(user_ids)
     if total == 0:
         await message.reply_text("❌ No users yet.")
         return ConversationHandler.END
     status_msg = await message.reply_text(f"📡 Broadcasting to {total} users...")
     success, failed = 0, 0
-    for uid in list(known_users):
+    for uid in user_ids:
         try:
             await context.bot.copy_message(chat_id=uid, from_chat_id=message.chat_id, message_id=message.message_id)
             success += 1
@@ -349,10 +306,23 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     return ConversationHandler.END
 
 
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    if update.effective_user.id != ADMIN_NUMERIC_ID:
+        await update.message.reply_text("❌ Not authorized.")
+        return
+    text = (f"📊 *Bot Statistics*\n\n"
+            f"👥 Total Users: `{count_users()}`\n"
+            f"🎁 Gift Code: `{TODAY_GIFT_CODE}`\n"
+            f"💾 Database: SQLite Active\n"
+            f"⚡ Status: Online 24/7")
+    await update.message.reply_text(text, parse_mode='Markdown')
+
+
+# --- FLOWS ---
 async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     await query.edit_message_text(t("gift_prompt", lang), parse_mode='Markdown')
     return ASK_GAME_ID
 
@@ -360,7 +330,7 @@ async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 async def receive_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
     context.user_data['game_id'] = user_data
-    lang = get_lang(update.effective_user.id)
+    lang = get_user_lang(update.effective_user.id)
     keyboard = [
         [InlineKeyboardButton(t("btn_yes_reg", lang), callback_data='team_yes')],
         [InlineKeyboardButton(t("btn_no_new", lang), callback_data='team_no')],
@@ -374,7 +344,7 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     user = query.from_user
-    lang = get_lang(user.id)
+    lang = get_user_lang(user.id)
     game_id = context.user_data.get('game_id', '?')
     
     if query.data == 'team_yes':
@@ -392,7 +362,7 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     keyboard = [
         [InlineKeyboardButton(t("btn_dep_issue", lang), callback_data='dep_issue')],
         [InlineKeyboardButton(t("btn_with_issue", lang), callback_data='with_issue')],
@@ -405,7 +375,7 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     if query.data == 'dep_issue':
         text = t("dep_trouble", lang)
         state = DEPOSIT_HELP
@@ -424,7 +394,7 @@ async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     if query.data == 'solved':
         text = t("solved", lang)
     else:
@@ -438,7 +408,7 @@ async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def human_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     await query.edit_message_text(t("human_prompt", lang), parse_mode='Markdown')
     return HUMAN_AGENT
 
@@ -446,7 +416,7 @@ async def human_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int
 async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
     user = update.effective_user
-    lang = get_lang(user.id)
+    lang = get_user_lang(user.id)
     text = t("human_received", lang, data=user_data, admin=ADMIN_ID)
     keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -457,7 +427,7 @@ async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
-    lang = get_lang(query.from_user.id)
+    lang = get_user_lang(query.from_user.id)
     
     if query.data == 'referral':
         text = t("referral", lang, link=REGISTER_LINK)
@@ -481,6 +451,7 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 
 
 if __name__ == '__main__':
+    init_db()  # Initialize database on startup
     threading.Thread(target=run_web_server, daemon=True).start()
     app_bot = ApplicationBuilder().token(TOKEN).build()
     
@@ -501,9 +472,7 @@ if __name__ == '__main__':
             CallbackQueryHandler(button_click, pattern='^changelang$'),
         ],
         states={
-            CHOOSE_LANG: [
-                CallbackQueryHandler(set_language, pattern='^lang_(en|hi|te)$'),
-            ],
+            CHOOSE_LANG: [CallbackQueryHandler(set_language, pattern='^lang_(en|hi|te)$')],
             ASK_GAME_ID: [
                 MessageHandler(filters.TEXT | filters.PHOTO, receive_game_id),
                 CallbackQueryHandler(button_click),
@@ -524,10 +493,11 @@ if __name__ == '__main__':
     
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CommandHandler("language", language_command))
+    app_bot.add_handler(CommandHandler("stats", stats_command))
     app_bot.add_handler(broadcast_conv)
     app_bot.add_handler(main_conv)
     app_bot.add_handler(CallbackQueryHandler(button_click))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_auto_reply))
     
-    print("Bot running with 3 languages + language button!")
+    print("Bot running with SQLite database + 3 languages!")
     app_bot.run_polling()
