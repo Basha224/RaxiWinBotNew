@@ -2,9 +2,9 @@ import logging
 import threading
 import os
 import asyncio
-import sqlite3
 from datetime import datetime
 from flask import Flask
+from supabase import create_client, Client
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
     ApplicationBuilder,
@@ -17,16 +17,20 @@ from telegram.ext import (
 )
 
 # ==========================================
-# CONFIGURATION
+# CONFIGURATION (All values filled in)
 # ==========================================
 TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
-ADMIN_ID = "@proearner0"
+ADMIN_ID = "@pro_earner_0"
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
 ADMIN_NUMERIC_ID = 6081001025
 LOG_CHANNEL_ID = ADMIN_NUMERIC_ID
-DB_FILE = "raxiwin.db"
+
+SUPABASE_URL = "https://izxzdcvymipyvxcrgbee.supabase.co"
+SUPABASE_KEY = "sb_publishable_KYwqH8JMDCk9utMYyP9Eyg_WFAjUuZS"
 # ==========================================
+
+supabase: Client = create_client(SUPABASE_URL, SUPABASE_KEY)
 
 CHOOSE_LANG, ASK_GAME_ID, ASK_TEAM_STATUS, DEPOSIT_MENU, DEPOSIT_HELP, WITHDRAW_HELP, HUMAN_AGENT, BROADCAST_MSG = range(8)
 
@@ -41,70 +45,59 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # ==========================================
-# DATABASE SETUP
+# SUPABASE DATABASE FUNCTIONS
 # ==========================================
-def init_db():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute('''CREATE TABLE IF NOT EXISTS users (
-        user_id INTEGER PRIMARY KEY,
-        username TEXT,
-        first_name TEXT,
-        language TEXT DEFAULT 'en',
-        joined_at TEXT
-    )''')
-    c.execute('''CREATE TABLE IF NOT EXISTS stats (
-        key TEXT PRIMARY KEY,
-        value INTEGER DEFAULT 0
-    )''')
-    conn.commit()
-    conn.close()
-
 def save_user(user_id, username, first_name):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT user_id FROM users WHERE user_id = ?", (user_id,))
-    exists = c.fetchone()
-    if not exists:
-        c.execute("INSERT INTO users (user_id, username, first_name, language, joined_at) VALUES (?, ?, ?, 'en', ?)",
-                  (user_id, username or "", first_name or "", datetime.now().strftime("%Y-%m-%d %H:%M")))
-    conn.commit()
-    conn.close()
-    return not exists  # True if new user
+    try:
+        response = supabase.table('users').select('user_id').eq('user_id', user_id).execute()
+        if len(response.data) == 0:
+            supabase.table('users').insert({
+                "user_id": user_id,
+                "username": username or "",
+                "first_name": first_name or "",
+                "language": "en",
+                "joined_at": datetime.now().isoformat()
+            }).execute()
+            return True
+        return False
+    except Exception as e:
+        logging.error(f"Supabase save_user error: {e}")
+        return False
 
 def get_user_lang(user_id):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT language FROM users WHERE user_id = ?", (user_id,))
-    row = c.fetchone()
-    conn.close()
-    return row[0] if row else "en"
+    try:
+        response = supabase.table('users').select('language').eq('user_id', user_id).execute()
+        if len(response.data) > 0:
+            return response.data[0]['language']
+        return "en"
+    except Exception as e:
+        logging.error(f"Supabase get_user_lang error: {e}")
+        return "en"
 
 def set_user_lang(user_id, lang):
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("UPDATE users SET language = ? WHERE user_id = ?", (lang, user_id))
-    conn.commit()
-    conn.close()
+    try:
+        supabase.table('users').update({"language": lang}).eq('user_id', user_id).execute()
+    except Exception as e:
+        logging.error(f"Supabase set_user_lang error: {e}")
 
 def get_all_user_ids():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT user_id FROM users")
-    rows = c.fetchall()
-    conn.close()
-    return [r[0] for r in rows]
+    try:
+        response = supabase.table('users').select('user_id').execute()
+        return [row['user_id'] for row in response.data]
+    except Exception as e:
+        logging.error(f"Supabase get_all_user_ids error: {e}")
+        return []
 
 def count_users():
-    conn = sqlite3.connect(DB_FILE)
-    c = conn.cursor()
-    c.execute("SELECT COUNT(*) FROM users")
-    count = c.fetchone()[0]
-    conn.close()
-    return count
+    try:
+        response = supabase.table('users').select('user_id').execute()
+        return len(response.data)
+    except Exception as e:
+        logging.error(f"Supabase count_users error: {e}")
+        return 0
 
 # ==========================================
-# TRANSLATIONS (Same as before)
+# TRANSLATIONS
 # ==========================================
 TEXTS = {
     "lang_set": {"en": "✅ Language set to English!", "hi": "✅ भाषा हिंदी में सेट हो गई!", "te": "✅ భాష తెలుగులో సెట్ చేయబడింది!"},
@@ -155,7 +148,6 @@ TEXTS = {
     "kw_help_body": {"en": "Login, Deposit, Withdraw, OTP, Password, Gift codes.", "hi": "लॉगिन, डिपॉजिट, विड्रॉ, OTP, पासवर्ड, गिफ्ट।", "te": "లాగిన్, డిపాజిట్, విత్‌డ్రా, OTP, పాస్‌వర్డ్, గిఫ్ట్."},
 }
 
-
 def t(key, lang, **kwargs):
     text = TEXTS.get(key, {}).get(lang, TEXTS.get(key, {}).get("en", ""))
     if kwargs:
@@ -165,15 +157,13 @@ def t(key, lang, **kwargs):
             return text
     return text
 
-
 async def log_to_channel(bot, message: str):
     try:
         await bot.send_message(chat_id=LOG_CHANNEL_ID, text=message, parse_mode='Markdown')
     except Exception as e:
         logging.error(f"Log error: {e}")
 
-
-# --- LANGUAGE SELECTION ---
+# --- LANGUAGE ---
 async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [
         [InlineKeyboardButton("🇬🇧 English", callback_data='lang_en')],
@@ -187,7 +177,6 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
         await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CHOOSE_LANG
 
-
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -197,12 +186,9 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await main_menu(update, context)
     return ASK_GAME_ID
 
-
-# --- MAIN MENU ---
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     user_id = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
     lang = get_user_lang(user_id)
-    
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
         [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
@@ -213,32 +199,25 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = t("welcome", lang)
-    
     if update.message:
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     elif update.callback_query:
         await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup)
 
-
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     is_new = save_user(user.id, user.username, user.first_name)
-    
     if is_new:
         await log_to_channel(context.bot,
             f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
         return await language_selection(update, context)
-    
-    # Existing user - go straight to menu
     await main_menu(update, context)
     return ASK_GAME_ID
-
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await language_selection(update, context)
 
-
-# --- KEYWORD AUTO-REPLY ---
+# --- KEYWORDS ---
 async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
@@ -247,7 +226,6 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lang = get_user_lang(user.id)
     save_user(user.id, user.username, user.first_name)
     admin = ADMIN_ID
-    
     if "otp" in text:
         reply = f"📩 *{t('kw_otp_title', lang)}*\n\n{t('kw_otp_body', lang, admin=admin)}"
     elif "password" in text:
@@ -268,21 +246,18 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
         await update.message.reply_text(t("kw_unknown", lang), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
-    
     keyboard = [
         [InlineKeyboardButton(t("btn_contact", lang), url=f"https://t.me/{admin.replace('@', '')}")],
         [InlineKeyboardButton(t("btn_back", lang), callback_data='back')]
     ]
     await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-
-# --- ADMIN COMMANDS ---
+# --- ADMIN ---
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         return ConversationHandler.END
     await update.message.reply_text(f"📢 Broadcast Mode\n👥 Total: `{count_users()}`\n\nSend the message.", parse_mode='Markdown')
     return BROADCAST_MSG
-
 
 async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
@@ -305,7 +280,6 @@ async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await status_msg.edit_text(f"✅ Broadcast done!\n📤 Sent: {success}\n❌ Failed: {failed}")
     return ConversationHandler.END
 
-
 async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         await update.message.reply_text("❌ Not authorized.")
@@ -313,10 +287,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     text = (f"📊 *Bot Statistics*\n\n"
             f"👥 Total Users: `{count_users()}`\n"
             f"🎁 Gift Code: `{TODAY_GIFT_CODE}`\n"
-            f"💾 Database: SQLite Active\n"
+            f"💾 Database: Supabase (Permanent)\n"
+            f"🌍 Languages: EN / HI / TE\n"
             f"⚡ Status: Online 24/7")
     await update.message.reply_text(text, parse_mode='Markdown')
-
 
 # --- FLOWS ---
 async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -325,7 +299,6 @@ async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     lang = get_user_lang(query.from_user.id)
     await query.edit_message_text(t("gift_prompt", lang), parse_mode='Markdown')
     return ASK_GAME_ID
-
 
 async def receive_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
@@ -339,25 +312,21 @@ async def receive_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     await update.message.reply_text(t("gift_received", lang, data=user_data), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ASK_TEAM_STATUS
 
-
 async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     user = query.from_user
     lang = get_user_lang(user.id)
     game_id = context.user_data.get('game_id', '?')
-    
     if query.data == 'team_yes':
         text = t("gift_verified", lang, admin=ADMIN_ID, id=game_id)
         await log_to_channel(context.bot, f"✅ Gift Claim\n👤 {user.first_name}\n🆔 `{game_id}`")
     else:
         text = t("gift_not_reg", lang, link=REGISTER_LINK)
         await log_to_channel(context.bot, f"❌ Unregistered\n👤 {user.first_name}")
-    
     keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ConversationHandler.END
-
 
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -370,7 +339,6 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
     ]
     await query.edit_message_text(t("dep_menu", lang), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return DEPOSIT_MENU
-
 
 async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
@@ -390,7 +358,6 @@ async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return state
 
-
 async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -404,14 +371,12 @@ async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ConversationHandler.END
 
-
 async def human_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     lang = get_user_lang(query.from_user.id)
     await query.edit_message_text(t("human_prompt", lang), parse_mode='Markdown')
     return HUMAN_AGENT
-
 
 async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
@@ -423,12 +388,10 @@ async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE
     await log_to_channel(context.bot, f"💬 HUMAN REQUEST\n👤 {user.first_name}\n📝 {user_data}")
     return ConversationHandler.END
 
-
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     query = update.callback_query
     await query.answer()
     lang = get_user_lang(query.from_user.id)
-    
     if query.data == 'referral':
         text = t("referral", lang, link=REGISTER_LINK)
     elif query.data == 'faq':
@@ -440,27 +403,22 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         return
     else:
         return
-    
     keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     await main_menu(update, context)
     return ASK_GAME_ID
 
-
+# --- MAIN ---
 if __name__ == '__main__':
-    init_db()  # Initialize database on startup
     threading.Thread(target=run_web_server, daemon=True).start()
     app_bot = ApplicationBuilder().token(TOKEN).build()
-    
     broadcast_conv = ConversationHandler(
         entry_points=[CommandHandler('broadcast', broadcast_command)],
         states={BROADCAST_MSG: [MessageHandler(filters.ALL & ~filters.COMMAND, send_broadcast)]},
         fallbacks=[CommandHandler('cancel', cancel)],
     )
-    
     main_conv = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
@@ -490,7 +448,6 @@ if __name__ == '__main__':
             CallbackQueryHandler(button_click),
         ],
     )
-    
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CommandHandler("language", language_command))
     app_bot.add_handler(CommandHandler("stats", stats_command))
@@ -498,6 +455,5 @@ if __name__ == '__main__':
     app_bot.add_handler(main_conv)
     app_bot.add_handler(CallbackQueryHandler(button_click))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_auto_reply))
-    
-    print("Bot running with SQLite database + 3 languages!")
+    print("Bot running with Supabase + 3 languages!")
     app_bot.run_polling()
