@@ -17,10 +17,10 @@ from telegram.ext import (
 )
 
 # ==========================================
-# CONFIGURATION (All values filled in)
+# CONFIGURATION
 # ==========================================
 TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
-ADMIN_ID = "@pro_earner_0"
+ADMIN_ID = "@proearner0"
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
 ADMIN_NUMERIC_ID = 6081001025
@@ -45,7 +45,7 @@ def run_web_server():
     app.run(host='0.0.0.0', port=port)
 
 # ==========================================
-# SUPABASE DATABASE FUNCTIONS
+# SUPABASE DATABASE
 # ==========================================
 def save_user(user_id, username, first_name):
     try:
@@ -163,6 +163,14 @@ async def log_to_channel(bot, message: str):
     except Exception as e:
         logging.error(f"Log error: {e}")
 
+def get_cached_lang(context, user_id):
+    """Get language from cache first, then Supabase"""
+    lang = context.user_data.get('lang')
+    if not lang:
+        lang = get_user_lang(user_id)
+        context.user_data['lang'] = lang
+    return lang
+
 # ==========================================
 # LANGUAGE SELECTION
 # ==========================================
@@ -179,7 +187,7 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
     elif update.callback_query:
         try:
             await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-        except Exception:
+        except:
             await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CHOOSE_LANG
 
@@ -187,15 +195,18 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     query = update.callback_query
     await query.answer()
     lang = query.data.split('_')[1]
-    set_user_lang(query.from_user.id, lang)
+    user_id = query.from_user.id
+    
+    # Save to BOTH Supabase AND memory cache
+    set_user_lang(user_id, lang)
+    context.user_data['lang'] = lang
     
     try:
         await query.edit_message_text(t("lang_set", lang), parse_mode='Markdown')
     except:
         pass
     
-    # Show main menu
-    user_id = query.from_user.id
+    # Show main menu in the new language
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
         [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
@@ -215,7 +226,8 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 # ==========================================
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
-    lang = get_user_lang(user_id)
+    lang = get_cached_lang(context, user_id)
+    
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
         [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
@@ -226,15 +238,23 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = t("welcome", lang)
+    
     if update.message:
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     elif update.callback_query:
-        await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup)
+        try:
+            await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup)
+        except:
+            await update.callback_query.message.reply_text(welcome_text, reply_markup=reply_markup)
     return ASK_GAME_ID
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     is_new = save_user(user.id, user.username, user.first_name)
+    
+    # Load language into cache
+    context.user_data['lang'] = get_user_lang(user.id)
+    
     if is_new:
         await log_to_channel(context.bot,
             f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
@@ -252,9 +272,10 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         return
     text = update.message.text.lower()
     user = update.effective_user
-    lang = get_user_lang(user.id)
+    lang = get_cached_lang(context, user.id)
     save_user(user.id, user.username, user.first_name)
     admin = ADMIN_ID
+    
     if "otp" in text:
         reply = f"📩 *{t('kw_otp_title', lang)}*\n\n{t('kw_otp_body', lang, admin=admin)}"
     elif "password" in text:
@@ -275,6 +296,7 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
         await update.message.reply_text(t("kw_unknown", lang), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
+    
     keyboard = [
         [InlineKeyboardButton(t("btn_contact", lang), url=f"https://t.me/{admin.replace('@', '')}")],
         [InlineKeyboardButton(t("btn_back", lang), callback_data='back')]
@@ -329,14 +351,14 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
 async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
+    lang = get_cached_lang(context, query.from_user.id)
     await query.edit_message_text(t("gift_prompt", lang), parse_mode='Markdown')
     return ASK_GAME_ID
 
 async def receive_game_id(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
     context.user_data['game_id'] = user_data
-    lang = get_user_lang(update.effective_user.id)
+    lang = get_cached_lang(context, update.effective_user.id)
     keyboard = [
         [InlineKeyboardButton(t("btn_yes_reg", lang), callback_data='team_yes')],
         [InlineKeyboardButton(t("btn_no_new", lang), callback_data='team_no')],
@@ -349,7 +371,7 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
     query = update.callback_query
     await query.answer()
     user = query.from_user
-    lang = get_user_lang(user.id)
+    lang = get_cached_lang(context, user.id)
     game_id = context.user_data.get('game_id', '?')
     if query.data == 'team_yes':
         text = t("gift_verified", lang, admin=ADMIN_ID, id=game_id)
@@ -364,7 +386,7 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
 async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
+    lang = get_cached_lang(context, query.from_user.id)
     keyboard = [
         [InlineKeyboardButton(t("btn_dep_issue", lang), callback_data='dep_issue')],
         [InlineKeyboardButton(t("btn_with_issue", lang), callback_data='with_issue')],
@@ -376,7 +398,7 @@ async def deposit_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> i
 async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
+    lang = get_cached_lang(context, query.from_user.id)
     if query.data == 'dep_issue':
         text = t("dep_trouble", lang)
         state = DEPOSIT_HELP
@@ -394,7 +416,7 @@ async def deposit_choice(update: Update, context: ContextTypes.DEFAULT_TYPE) -> 
 async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
+    lang = get_cached_lang(context, query.from_user.id)
     if query.data == 'solved':
         text = t("solved", lang)
     else:
@@ -407,14 +429,14 @@ async def issue_resolution(update: Update, context: ContextTypes.DEFAULT_TYPE) -
 async def human_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
+    lang = get_cached_lang(context, query.from_user.id)
     await query.edit_message_text(t("human_prompt", lang), parse_mode='Markdown')
     return HUMAN_AGENT
 
 async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_data = "Screenshot" if update.message.photo else update.message.text
     user = update.effective_user
-    lang = get_user_lang(user.id)
+    lang = get_cached_lang(context, user.id)
     text = t("human_received", lang, data=user_data, admin=ADMIN_ID)
     keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
@@ -428,7 +450,7 @@ async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
-    lang = get_user_lang(user_id)
+    lang = get_cached_lang(context, user_id)
     data = query.data
     
     if data == 'changelang':
