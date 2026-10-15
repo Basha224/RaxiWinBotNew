@@ -1,6 +1,7 @@
 import logging
 import threading
 import os
+import asyncio
 from flask import Flask
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import (
@@ -19,12 +20,17 @@ from telegram.ext import (
 TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
 ADMIN_ID = "@pro_earner_0" 
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
-
-# Today's gift code (change this daily)
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
+
+# Admin's NUMERIC ID for broadcast check (get it from @userinfobot)
+ADMIN_NUMERIC_ID = 6081001025
 # ==========================================
 
-ASK_GAME_ID, ASK_TEAM_STATUS, DEPOSIT_MENU, DEPOSIT_HELP, WITHDRAW_HELP, HUMAN_AGENT = range(6)
+# Known users set (in-memory - resets when Render restarts)
+known_users = set()
+
+# Conversation States
+ASK_GAME_ID, ASK_TEAM_STATUS, DEPOSIT_MENU, DEPOSIT_HELP, WITHDRAW_HELP, HUMAN_AGENT, BROADCAST_MSG = range(7)
 
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 
@@ -55,9 +61,11 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 # --- /start Command ---
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    # Track user
+    known_users.add(update.effective_user.id)
     await main_menu(update, context)
 
-# --- /help Command (NEW) ---
+# --- /help Command ---
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         "📖 *RaxiWin Help Center*\n\n"
@@ -66,12 +74,12 @@ async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
         "🎁 /gift - Get today's free gift code\n"
         "💬 /contact - Contact our admin\n"
         "❓ /help - Show this help message\n\n"
-        "💡 *Tip:* You can also use the buttons in the main menu for Deposit/Withdraw help and FAQs."
+        "💡 *Tip:* Use the buttons in the main menu for Deposit/Withdraw help and FAQs."
     )
     keyboard = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data='back')]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-# --- /gift Command (NEW) ---
+# --- /gift Command ---
 async def gift_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         f"🎁 *Today's Free Gift Code*\n\n"
@@ -86,7 +94,7 @@ async def gift_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> No
     keyboard = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data='back')]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-# --- /contact Command (NEW) ---
+# --- /contact Command ---
 async def contact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     text = (
         f"💬 *Contact Our Support Team*\n\n"
@@ -101,6 +109,87 @@ async def contact_command(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     keyboard = [[InlineKeyboardButton("💬 Message Admin", url=f"https://t.me/{ADMIN_ID.replace('@', '')}")],
                 [InlineKeyboardButton("⬅️ Back to Menu", callback_data='back')]]
     await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+
+# --- /broadcast Command (ADMIN ONLY) ---
+async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    
+    # Security: Only admin can use this
+    if user_id != ADMIN_NUMERIC_ID:
+        await update.message.reply_text("❌ You are not authorized to use this command.")
+        return ConversationHandler.END
+    
+    total = len(known_users)
+    await update.message.reply_text(
+        f"📢 *Broadcast Mode*\n\n"
+        f"👥 Total users: `{total}`\n\n"
+        f"Send me the message you want to broadcast to all users.\n\n"
+        f"💡 You can send text, an image with caption, or a formatted message.\n\n"
+        f"⚠️ *Send /cancel to abort.*",
+        parse_mode='Markdown'
+    )
+    return BROADCAST_MSG
+
+async def send_broadcast(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    user_id = update.effective_user.id
+    
+    if user_id != ADMIN_NUMERIC_ID:
+        return ConversationHandler.END
+    
+    message = update.message
+    total = len(known_users)
+    
+    if total == 0:
+        await message.reply_text("❌ No users to broadcast to yet.")
+        return ConversationHandler.END
+    
+    status_msg = await message.reply_text(f"📡 Broadcasting to {total} users... Please wait.")
+    
+    success = 0
+    failed = 0
+    
+    for uid in list(known_users):
+        try:
+            # Forward the admin's message to each user
+            await context.bot.copy_message(
+                chat_id=uid,
+                from_chat_id=message.chat_id,
+                message_id=message.message_id
+            )
+            success += 1
+            # Rate limit: avoid Telegram flood limits
+            await asyncio.sleep(0.05)
+        except Exception as e:
+            logging.error(f"Failed to send to {uid}: {e}")
+            failed += 1
+            # Remove users who blocked the bot
+            if "blocked" in str(e).lower() or "chat not found" in str(e).lower():
+                known_users.discard(uid)
+    
+    await status_msg.edit_text(
+        f"✅ *Broadcast Complete!*\n\n"
+        f"📤 Sent: `{success}`\n"
+        f"❌ Failed: `{failed}`\n"
+        f"👥 Total users: `{total}`",
+        parse_mode='Markdown'
+    )
+    return ConversationHandler.END
+
+# --- /stats Command (ADMIN ONLY) ---
+async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+    user_id = update.effective_user.id
+    if user_id != ADMIN_NUMERIC_ID:
+        await update.message.reply_text("❌ You are not authorized.")
+        return
+    
+    text = (
+        f"📊 *Bot Statistics*\n\n"
+        f"👥 Total Users: `{len(known_users)}`\n"
+        f"🎁 Gift Code: `{TODAY_GIFT_CODE}`\n"
+        f"👤 Admin: {ADMIN_ID}\n"
+        f"⚡ Status: Online 24/7"
+    )
+    await update.message.reply_text(text, parse_mode='Markdown')
 
 # --- Gift Code Flow ---
 async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -127,7 +216,7 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
     if query.data == 'team_yes':
         text = f"✅ *Verified Team Member!*\n\nPlease contact our admin:\n\n👤 Admin: {ADMIN_ID}\n🆔 Your ID: `{game_id}`\n\nSend your ID to the admin to claim your gift code."
     else:
-        text = f"❌ *Not Registered Yet*\n\nYou need to register first.\n\n🔗 *Register using this link ONLY (not Login Register):*\n{REGISTER_LINK}\n\nAfter registering, click /start and try again."
+        text = f"❌ *Not Registered Yet*\n\nYou need to register first.\n\n🔗 *Register using this link ONLY:*\n{REGISTER_LINK}\n\nAfter registering, click /start and try again."
     keyboard = [[InlineKeyboardButton("⬅️ Back to Menu", callback_data='back')]]
     await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ConversationHandler.END
@@ -209,7 +298,18 @@ if __name__ == '__main__':
     threading.Thread(target=run_web_server, daemon=True).start()
     app_bot = ApplicationBuilder().token(TOKEN).build()
     
-    conv_handler = ConversationHandler(
+    # Broadcast conversation handler
+    broadcast_conv = ConversationHandler(
+        entry_points=[CommandHandler('broadcast', broadcast_command)],
+        states={
+            BROADCAST_MSG: [
+                MessageHandler(filters.ALL & ~filters.COMMAND, send_broadcast),
+            ],
+        },
+        fallbacks=[CommandHandler('cancel', cancel)],
+    )
+    
+    main_conv = ConversationHandler(
         entry_points=[
             CallbackQueryHandler(gift_code_start, pattern='^gift$'),
             CallbackQueryHandler(deposit_start, pattern='^deposit$'),
@@ -229,12 +329,14 @@ if __name__ == '__main__':
         ],
     )
     
-    # Add all handlers
+    # Register all handlers
     app_bot.add_handler(CommandHandler("start", start))
-    app_bot.add_handler(CommandHandler("help", help_command))     # NEW
-    app_bot.add_handler(CommandHandler("gift", gift_command))     # NEW
-    app_bot.add_handler(CommandHandler("contact", contact_command)) # NEW
-    app_bot.add_handler(conv_handler)
+    app_bot.add_handler(CommandHandler("help", help_command))
+    app_bot.add_handler(CommandHandler("gift", gift_command))
+    app_bot.add_handler(CommandHandler("contact", contact_command))
+    app_bot.add_handler(CommandHandler("stats", stats_command))
+    app_bot.add_handler(broadcast_conv)   # Broadcast must come BEFORE main_conv
+    app_bot.add_handler(main_conv)
     app_bot.add_handler(CallbackQueryHandler(button_click))
     
     print("Bot is running perfectly... Press Ctrl+C to stop.")
