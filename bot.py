@@ -16,7 +16,7 @@ from telegram.ext import (
 # ==========================================
 # CONFIGURATION (Token is already inserted)
 # ==========================================
-TOKEN = "8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY" 
+TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
 ADMIN_ID = "@pro_earner_0" 
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 # ==========================================
