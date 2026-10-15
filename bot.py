@@ -163,7 +163,9 @@ async def log_to_channel(bot, message: str):
     except Exception as e:
         logging.error(f"Log error: {e}")
 
-# --- LANGUAGE ---
+# ==========================================
+# LANGUAGE SELECTION
+# ==========================================
 async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     keyboard = [
         [InlineKeyboardButton("🇬🇧 English", callback_data='lang_en')],
@@ -171,10 +173,14 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🇮🇳 తెలుగు", callback_data='lang_te')]
     ]
     text = "🌐 *Please choose your language:*\n🌐 *कृपया अपनी भाषा चुनें:*\n🌐 *దయచేసి మీ భాషను ఎంచుకోండి:*"
+    
     if update.message:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     elif update.callback_query:
-        await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        try:
+            await update.callback_query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        except Exception:
+            await update.callback_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return CHOOSE_LANG
 
 async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -182,11 +188,32 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await query.answer()
     lang = query.data.split('_')[1]
     set_user_lang(query.from_user.id, lang)
-    await query.edit_message_text(t("lang_set", lang), parse_mode='Markdown')
-    await main_menu(update, context)
+    
+    try:
+        await query.edit_message_text(t("lang_set", lang), parse_mode='Markdown')
+    except:
+        pass
+    
+    # Show main menu
+    user_id = query.from_user.id
+    keyboard = [
+        [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
+        [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
+        [InlineKeyboardButton(t("btn_deposit", lang), callback_data='deposit')],
+        [InlineKeyboardButton(t("btn_faq", lang), callback_data='faq')],
+        [InlineKeyboardButton(t("btn_human", lang), callback_data='human')],
+        [InlineKeyboardButton(t("btn_changelang", lang), callback_data='changelang')]
+    ]
+    await query.message.reply_text(
+        t("welcome", lang),
+        reply_markup=InlineKeyboardMarkup(keyboard)
+    )
     return ASK_GAME_ID
 
-async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# ==========================================
+# MAIN MENU
+# ==========================================
+async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
     lang = get_user_lang(user_id)
     keyboard = [
@@ -203,6 +230,7 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     elif update.callback_query:
         await update.callback_query.edit_message_text(welcome_text, reply_markup=reply_markup)
+    return ASK_GAME_ID
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
@@ -211,13 +239,14 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
         await log_to_channel(context.bot,
             f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
         return await language_selection(update, context)
-    await main_menu(update, context)
-    return ASK_GAME_ID
+    return await main_menu(update, context)
 
 async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     return await language_selection(update, context)
 
-# --- KEYWORDS ---
+# ==========================================
+# KEYWORD AUTO-REPLY
+# ==========================================
 async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
         return
@@ -252,7 +281,9 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     ]
     await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
-# --- ADMIN ---
+# ==========================================
+# ADMIN COMMANDS
+# ==========================================
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         return ConversationHandler.END
@@ -292,7 +323,9 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
             f"⚡ Status: Online 24/7")
     await update.message.reply_text(text, parse_mode='Markdown')
 
-# --- FLOWS ---
+# ==========================================
+# FLOWS
+# ==========================================
 async def gift_code_start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
@@ -388,37 +421,52 @@ async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE
     await log_to_channel(context.bot, f"💬 HUMAN REQUEST\n👤 {user.first_name}\n📝 {user_data}")
     return ConversationHandler.END
 
-async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
+# ==========================================
+# BUTTON CLICK (Handles all menu buttons)
+# ==========================================
+async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
-    lang = get_user_lang(query.from_user.id)
-    if query.data == 'referral':
-        text = t("referral", lang, link=REGISTER_LINK)
-    elif query.data == 'faq':
-        text = t("faq", lang)
-    elif query.data == 'changelang':
+    user_id = query.from_user.id
+    lang = get_user_lang(user_id)
+    data = query.data
+    
+    if data == 'changelang':
         return await language_selection(update, context)
-    elif query.data == 'back':
-        await main_menu(update, context)
-        return
-    else:
-        return
-    keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
-    await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
-
-async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
-    await main_menu(update, context)
+    
+    elif data == 'referral':
+        text = t("referral", lang, link=REGISTER_LINK)
+        keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return ASK_GAME_ID
+    
+    elif data == 'faq':
+        text = t("faq", lang)
+        keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
+        return ASK_GAME_ID
+    
+    elif data == 'back':
+        return await main_menu(update, context)
+    
     return ASK_GAME_ID
 
-# --- MAIN ---
+async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
+    return await main_menu(update, context)
+
+# ==========================================
+# MAIN
+# ==========================================
 if __name__ == '__main__':
     threading.Thread(target=run_web_server, daemon=True).start()
     app_bot = ApplicationBuilder().token(TOKEN).build()
+    
     broadcast_conv = ConversationHandler(
         entry_points=[CommandHandler('broadcast', broadcast_command)],
         states={BROADCAST_MSG: [MessageHandler(filters.ALL & ~filters.COMMAND, send_broadcast)]},
         fallbacks=[CommandHandler('cancel', cancel)],
     )
+    
     main_conv = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
@@ -427,13 +475,18 @@ if __name__ == '__main__':
             CallbackQueryHandler(deposit_start, pattern='^deposit$'),
             CallbackQueryHandler(human_start, pattern='^human$'),
             CallbackQueryHandler(set_language, pattern='^lang_(en|hi|te)$'),
-            CallbackQueryHandler(button_click, pattern='^changelang$'),
         ],
         states={
-            CHOOSE_LANG: [CallbackQueryHandler(set_language, pattern='^lang_(en|hi|te)$')],
-            ASK_GAME_ID: [
-                MessageHandler(filters.TEXT | filters.PHOTO, receive_game_id),
+            CHOOSE_LANG: [
+                CallbackQueryHandler(set_language, pattern='^lang_(en|hi|te)$'),
                 CallbackQueryHandler(button_click),
+            ],
+            ASK_GAME_ID: [
+                CallbackQueryHandler(gift_code_start, pattern='^gift$'),
+                CallbackQueryHandler(deposit_start, pattern='^deposit$'),
+                CallbackQueryHandler(human_start, pattern='^human$'),
+                CallbackQueryHandler(button_click),
+                MessageHandler(filters.TEXT & ~filters.COMMAND, receive_game_id),
             ],
             ASK_TEAM_STATUS: [CallbackQueryHandler(receive_team_status, pattern='^(team_yes|team_no)$')],
             DEPOSIT_MENU: [CallbackQueryHandler(deposit_choice, pattern='^(dep_issue|with_issue)$')],
@@ -444,10 +497,10 @@ if __name__ == '__main__':
         fallbacks=[
             CommandHandler('start', start),
             CommandHandler('language', language_command),
-            CallbackQueryHandler(cancel, pattern='^back$'),
             CallbackQueryHandler(button_click),
         ],
     )
+    
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CommandHandler("language", language_command))
     app_bot.add_handler(CommandHandler("stats", stats_command))
@@ -455,5 +508,6 @@ if __name__ == '__main__':
     app_bot.add_handler(main_conv)
     app_bot.add_handler(CallbackQueryHandler(button_click))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_auto_reply))
+    
     print("Bot running with Supabase + 3 languages!")
     app_bot.run_polling()
