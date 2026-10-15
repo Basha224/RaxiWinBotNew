@@ -17,8 +17,8 @@ from telegram.ext import (
 # ==========================================
 # CONFIGURATION
 # ==========================================
-TOKEN = "PASTE_YOUR_TOKEN_HERE"
-ADMIN_ID = "@pro_earner_0"
+TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
+ADMIN_ID = "@proearner0"
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
 ADMIN_NUMERIC_ID = 6081001025
