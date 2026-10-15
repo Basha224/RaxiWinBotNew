@@ -57,7 +57,7 @@ KEYWORD_REPLIES = {
         "✅ Capital letters (A-Z)\n"
         "✅ Small letters (a-z)\n"
         "✅ Numbers (0-9)\n\n"
-        "❌ NO symbols like @ # $ % & * !\n\n"
+        "❌ NO symbols like @ # $ % & !\n\n"
         "Forgot password? Use the 'Forgot Password' option on the login page."
     ),
     "withdraw": (
