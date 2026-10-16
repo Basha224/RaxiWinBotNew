@@ -19,7 +19,7 @@ from telegram.ext import (
 # ==========================================
 # CONFIGURATION
 # ==========================================
-TOKEN ="8740602277:AAEnKeFd4N_MNjVA3WsqzMKztCpFkmHRorY"
+TOKEN ="8740602277:AAGEMeyXRLt1dTogQH6w6h_QiDQKSbiffdg"
 ADMIN_ID = "@proearner0"
 REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
