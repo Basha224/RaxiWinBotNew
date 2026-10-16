@@ -17,11 +17,15 @@ from telegram.ext import (
 )
 
 # ==========================================
-# CONFIGURATION
+# CONFIGURATION - BDG GAME
 # ==========================================
-TOKEN ="8740602277:AAGEMeyXRLt1dTogQH6w6h_QiDQKSbiffdg"
+# ⚠️ PASTE YOUR BOT TOKEN HERE
+TOKEN ="8740602277:AAHCyrrNtkUBg3Pn0-i5vqU_igl0Eec0Xm4"
+
 ADMIN_ID = "@proearner0"
-REGISTER_LINK = "https://www.raxiwin.game/#/register?invitationCode=74158275546"
+REGISTER_LINK = "https://bdg4.vip/#/register?invitationCode=x5Vcp861092"
+INVITE_CODE = "x5Vcp861092"
+TELEGRAM_CHANNEL = "https://t.me/+H8f_nP-zUCZhMzll"
 TODAY_GIFT_CODE = "4346F170B0051BD21B95EE9DECBAC10C"
 ADMIN_NUMERIC_ID = 6081001025
 LOG_CHANNEL_ID = ADMIN_NUMERIC_ID
@@ -39,7 +43,7 @@ logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s
 app = Flask(__name__)
 @app.route('/')
 def home():
-    return "RaxiWin Support Bot is running 24/7!"
+    return "BDG Game Support Bot is running 24/7!"
 def run_web_server():
     port = int(os.environ.get('PORT', 8080))
     app.run(host='0.0.0.0', port=port)
@@ -97,11 +101,15 @@ def count_users():
         return 0
 
 # ==========================================
-# TRANSLATIONS
+# TRANSLATIONS - BDG GAME
 # ==========================================
 TEXTS = {
     "lang_set": {"en": "✅ Language set to English!", "hi": "✅ भाषा हिंदी में सेट हो गई!", "te": "✅ భాష తెలుగులో సెట్ చేయబడింది!"},
-    "welcome": {"en": "👋 Welcome to RaxiWin Support! How can we help you today?", "hi": "👋 RaxiWin सपोर्ट में आपका स्वागत है! हम आपकी कैसे मदद कर सकते हैं?", "te": "👋 RaxiWin సపోర్ట్‌కు స్వాగతం! మేము మీకు ఎలా సహాయం చేయగలము?"},
+    "welcome": {
+        "en": "👋 Welcome to BDG Game Support! How can we help you today?",
+        "hi": "👋 BDG Game सपोर्ट में आपका स्वागत है! हम आपकी कैसे मदद कर सकते हैं?",
+        "te": "👋 BDG Game సపోర్ట్‌కు స్వాగతం! మేము మీకు ఎలా సహాయం చేయగలము?"
+    },
     "btn_gift": {"en": "🎁 Daily Gift Code", "hi": "🎁 डेली गिफ्ट कोड", "te": "🎁 డైలీ గిఫ్ట్ కోడ్"},
     "btn_referral": {"en": "🔗 My Referral Link", "hi": "🔗 मेरा रेफरल लिंक", "te": "🔗 నా రెఫరల్ లింక్"},
     "btn_deposit": {"en": "💳 Deposit / Withdraw Help", "hi": "💳 डिपॉजिट / विड्रॉ हेल्प", "te": "💳 డిపాజిట్ / విత్‌డ్రా సహాయం"},
@@ -110,19 +118,44 @@ TEXTS = {
     "btn_changelang": {"en": "🌐 Change Language", "hi": "🌐 भाषा बदलें", "te": "🌐 భాష మార్చండి"},
     "btn_back": {"en": "⬅️ Back to Menu", "hi": "⬅️ मेनू पर वापस", "te": "⬅️ మెనూకు తిరిగి"},
     "btn_contact": {"en": "💬 Contact Admin", "hi": "💬 एडमिन से संपर्क करें", "te": "💬 అడ్మిన్‌ను సంప్రదించండి"},
+    "btn_channel": {"en": "📢 Join Channel", "hi": "📢 चैनल जॉइन करें", "te": "📢 ఛానెల్ జాయిన్ అవ్వండి"},
     "btn_yes_reg": {"en": "✅ Yes, I'm registered", "hi": "✅ हाँ, मैं रजिस्टर्ड हूँ", "te": "✅ అవును, నేను రిజిస్టర్ అయ్యాను"},
     "btn_no_new": {"en": "❌ No, I'm new", "hi": "❌ नहीं, मैं नया हूँ", "te": "❌ కాదు, నేను కొత్తవాడిని"},
     "btn_dep_issue": {"en": "💵 Deposit Issue", "hi": "💵 डिपॉजिट समस्या", "te": "💵 డిపాజిట్ సమస్య"},
     "btn_with_issue": {"en": "🏧 Withdrawal Issue", "hi": "🏧 विड्रॉ समस्या", "te": "🏧 విత్‌డ్రా సమస్య"},
     "btn_solved": {"en": "✅ Yes, solved", "hi": "✅ हाँ, हल हो गया", "te": "✅ అవును, పరిష్కరించబడింది"},
     "btn_human_contact": {"en": "❌ No, contact Human", "hi": "❌ नहीं, ह्यूमन से संपर्क करें", "te": "❌ కాదు, మానవుడిని సంప్రదించండి"},
-    "gift_prompt": {"en": "🎁 *Daily Gift Code*\n\nSend me your *Game ID*.", "hi": "🎁 *डेली गिफ्ट कोड*\n\nअपनी *गेम आईडी* भेजें।", "te": "🎁 *డైలీ గిఫ్ట్ కోడ్*\n\nమీ *గేమ్ ID* పంపండి."},
-    "gift_received": {"en": "Thank you! Received: `{data}`\n\nIs this ID registered under our team?", "hi": "धन्यवाद! मिला: `{data}`\n\nक्या यह आईडी हमारी टीम में है?", "te": "ధన్యవాదాలు! అందింది: `{data}`\n\nఈ ID మా టీమ్‌లో ఉందా?"},
-    "gift_verified": {"en": "✅ *Verified Team Member!*\n\nContact admin: {admin}\n🆔 `{id}`", "hi": "✅ *सत्यापित सदस्य!*\n\nएडमिन: {admin}\n🆔 `{id}`", "te": "✅ *ధృవీకరించబడిన సభ్యుడు!*\n\nఅడ్మిన్: {admin}\n🆔 `{id}`"},
-    "gift_not_reg": {"en": "❌ *Not Registered*\n\nRegister: {link}", "hi": "❌ *रजिस्टर्ड नहीं*\n\nरजिस्टर: {link}", "te": "❌ *రిజిస్టర్ కాలేదు*\n\nరిజిస్టర్: {link}"},
-    "referral": {"en": "🔗 *Your Referral Link:*\n\n{link}", "hi": "🔗 *आपका रेफरल लिंक:*\n\n{link}", "te": "🔗 *మీ రెఫరల్ లింక్:*\n\n{link}"},
-    "faq": {"en": "❓ *FAQ:*\n\n1. *Login?* - Phone/email\n2. *Password?* - Letters & numbers\n3. *Withdraw?* - Wallet > Payout", "hi": "❓ *सामान्य प्रश्न:*\n\n1. *लॉगिन?* - फ़ोन/ईमेल\n2. *पासवर्ड?* - अक्षर और नंबर\n3. *विड्रॉ?* - वॉलेट > पेआउट", "te": "❓ *FAQ:*\n\n1. *లాగిన్?* - ఫోన్/ఇమెయిల్\n2. *పాస్‌వర్డ్?* - అక్షరాలు & నంబర్లు\n3. *విత్‌డ్రా?* - వాలెట్ > పేఅవుట్"},
-    "dep_menu": {"en": "💳 *Deposit / Withdraw Help*\n\nChoose:", "hi": "💳 *डिपॉजिट / विड्रॉ*\n\nचुनें:", "te": "💳 *డిపాజిట్ / విత్‌డ్రా*\n\nఎంచుకోండి:"},
+    "gift_prompt": {
+        "en": "🎁 *Daily Gift Code*\n\nSend me your *BDG Game ID*.",
+        "hi": "🎁 *डेली गिफ्ट कोड*\n\nअपनी *BDG Game ID* भेजें।",
+        "te": "🎁 *డైలీ గిఫ్ట్ కోడ్*\n\nమీ *BDG Game ID* పంపండి."
+    },
+    "gift_received": {
+        "en": "Thank you! Received: `{data}`\n\nIs this ID registered under our team?",
+        "hi": "धन्यवाद! मिला: `{data}`\n\nक्या यह आईडी हमारी टीम में है?",
+        "te": "ధన్యవాదాలు! అందింది: `{data}`\n\nఈ ID మా టీమ్‌లో ఉందా?"
+    },
+    "gift_verified": {
+        "en": "✅ *Verified Team Member!*\n\nContact admin: {admin}\n🆔 `{id}`",
+        "hi": "✅ *सत्यापित सदस्य!*\n\nएडमिन: {admin}\n🆔 `{id}`",
+        "te": "✅ *ధృవీకరించబడిన సభ్యుడు!*\n\nఅడ్మిన్: {admin}\n🆔 `{id}`"
+    },
+    "gift_not_reg": {
+        "en": "❌ *Not Registered*\n\nRegister on BDG Game: {link}",
+        "hi": "❌ *रजिस्टर्ड नहीं*\n\nBDG Game पर रजिस्टर: {link}",
+        "te": "❌ *రిజిస్టర్ కాలేదు*\n\nBDG Game లో రిజిస్టర్: {link}"
+    },
+    "referral": {
+        "en": f"🔗 *Your BDG Game Referral Link:*\n\n{{link}}\n\nInvite Code: `{INVITE_CODE}`",
+        "hi": f"🔗 *आपका BDG Game रेफरल लिंक:*\n\n{{link}}\n\nइनविटेशन कोड: `{INVITE_CODE}`",
+        "te": f"🔗 *మీ BDG Game రెఫరల్ లింక్:*\n\n{{link}}\n\nఇన్విటేషన్ కోడ్: `{INVITE_CODE}`"
+    },
+    "faq": {
+        "en": f"❓ *BDG Game FAQ:*\n\n1. *Login?* - Use phone/email\n2. *Password?* - Letters & numbers only\n3. *Withdraw?* - Wallet > Payout\n4. *Invite Code:* `{INVITE_CODE}`",
+        "hi": f"❓ *BDG Game सामान्य प्रश्न:*\n\n1. *लॉगिन?* - फ़ोन/ईमेल\n2. *पासवर्ड?* - अक्षर और नंबर\n3. *विड्रॉ?* - वॉलेट > पेआउट\n4. *इनविटेशन कोड:* `{INVITE_CODE}`",
+        "te": f"❓ *BDG Game FAQ:*\n\n1. *లాగిన్?* - ఫోన్/ఇమెయిల్\n2. *పాస్‌వర్డ్?* - అక్షరాలు & నంబర్లు\n3. *విత్‌డ్రా?* - వాలెట్ > పేఅవుట్\n4. *ఇన్విటేషన్ కోడ్:* `{INVITE_CODE}`"
+    },
+    "dep_menu": {"en": "💳 *BDG Deposit / Withdraw Help*\n\nChoose:", "hi": "💳 *BDG डिपॉजिट / विड्रॉ*\n\nचुनें:", "te": "💳 *BDG డిపాజిట్ / విత్‌డ్రా*\n\nఎంచుకోండి:"},
     "dep_trouble": {"en": "💵 *Deposit:*\n1. Wallet\n2. UPI/Bank\n3. Min ₹100\n4. Wait 5-10 mins\n\nSolved?", "hi": "💵 *डिपॉजिट:*\n1. वॉलेट\n2. UPI/बैंक\n3. न्यूनतम ₹100\n4. 5-10 मिनट\n\nहल हुई?", "te": "💵 *డిపాజిట్:*\n1. వాలెట్\n2. UPI/బ్యాంక్\n3. కనీసం ₹100\n4. 5-10 నిమిషాలు\n\nపరిష్కారమైందా?"},
     "with_trouble": {"en": "🏧 *Withdrawal:*\n1. Wallet > Payout\n2. Bank/UPI\n3. Min ₹200\n4. Wait 30 mins\n\nSolved?", "hi": "🏧 *विड्रॉ:*\n1. वॉलेट > पेआउट\n2. बैंक/UPI\n3. न्यूनतम ₹200\n4. 30 मिनट\n\nहल हुई?", "te": "🏧 *విత్‌డ్రా:*\n1. వాలెట్ > పేఅవుట్\n2. బ్యాంక్/UPI\n3. కనీసం ₹200\n4. 30 నిమిషాలు\n\nపరిష్కారమైందా?"},
     "solved": {"en": "🎉 Great! /start for more.", "hi": "🎉 बढ़िया! /start करें।", "te": "🎉 అద్భుతం! /start చేయండి."},
@@ -140,11 +173,11 @@ TEXTS = {
     "kw_dep_body": {"en": "1. Login\n2. Wallet > Deposit\n3. UPI/Bank\n4. Min ₹100", "hi": "1. लॉगिन\n2. वॉलेट > डिपॉजिट\n3. UPI/बैंक\n4. ₹100", "te": "1. లాగిన్\n2. వాలెట్ > డిపాజిట్\n3. UPI/బ్యాంక్\n4. ₹100"},
     "kw_login_title": {"en": "🔓 Login", "hi": "🔓 लॉगिन", "te": "🔓 లాగిన్"},
     "kw_login_body": {"en": "1. Open app\n2. Login\n3. Phone/email\n4. Password\n5. OTP", "hi": "1. ऐप\n2. लॉगिन\n3. फ़ोन\n4. पासवर्ड\n5. OTP", "te": "1. యాప్\n2. లాగిన్\n3. ఫోన్\n4. పాస్‌వర్డ్\n5. OTP"},
-    "kw_reg_title": {"en": "📝 Register", "hi": "📝 रजिस्टर", "te": "📝 రిజిస్టర్"},
-    "kw_reg_body": {"en": "1. {link}\n2. Phone\n3. Password\n4. Code: 74158275546", "hi": "1. {link}\n2. फ़ोन\n3. पासवर्ड\n4. कोड: 74158275546", "te": "1. {link}\n2. ఫోన్\n3. పాస్‌వర్డ్\n4. కోడ్: 74158275546"},
-    "kw_bonus_title": {"en": "🎁 Bonus", "hi": "🎁 बोनस", "te": "🎁 బోనస్"},
+    "kw_reg_title": {"en": "📝 Register on BDG Game", "hi": "📝 BDG Game पर रजिस्टर", "te": "📝 BDG Game లో రిజిస్టర్"},
+    "kw_reg_body": {"en": f"1. {{link}}\n2. Phone\n3. Password\n4. Invite Code: `{INVITE_CODE}`", "hi": f"1. {{link}}\n2. फ़ोन\n3. पासवर्ड\n4. इनविटेशन कोड: `{INVITE_CODE}`", "te": f"1. {{link}}\n2. ఫోన్\n3. పాస్‌వర్డ్\n4. ఇన్విటేషన్ కోడ్: `{INVITE_CODE}`"},
+    "kw_bonus_title": {"en": "🎁 BDG Bonus", "hi": "🎁 BDG बोनस", "te": "🎁 BDG బోనస్"},
     "kw_bonus_body": {"en": "Code:\n`{code}`\n\n24 hours only.", "hi": "कोड:\n`{code}`\n\n24 घंटे।", "te": "కోడ్:\n`{code}`\n\n24 గంటలు."},
-    "kw_help_title": {"en": "🆘 Help", "hi": "🆘 मदद", "te": "🆘 సహాయం"},
+    "kw_help_title": {"en": "🆘 BDG Help", "hi": "🆘 BDG मदद", "te": "🆘 BDG సహాయం"},
     "kw_help_body": {"en": "Login, Deposit, Withdraw, OTP, Password, Gift codes.", "hi": "लॉगिन, डिपॉजिट, विड्रॉ, OTP, पासवर्ड, गिफ्ट।", "te": "లాగిన్, డిపాజిట్, విత్‌డ్రా, OTP, పాస్‌వర్డ్, గిఫ్ట్."},
 }
 
@@ -164,7 +197,6 @@ async def log_to_channel(bot, message: str):
         logging.error(f"Log error: {e}")
 
 def get_cached_lang(context, user_id):
-    """Get language from cache first, then Supabase"""
     lang = context.user_data.get('lang')
     if not lang:
         lang = get_user_lang(user_id)
@@ -181,7 +213,6 @@ async def language_selection(update: Update, context: ContextTypes.DEFAULT_TYPE)
         [InlineKeyboardButton("🇮🇳 తెలుగు", callback_data='lang_te')]
     ]
     text = "🌐 *Please choose your language:*\n🌐 *कृपया अपनी भाषा चुनें:*\n🌐 *దయచేసి మీ భాషను ఎంచుకోండి:*"
-    
     if update.message:
         await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     elif update.callback_query:
@@ -196,29 +227,22 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
     await query.answer()
     lang = query.data.split('_')[1]
     user_id = query.from_user.id
-    
-    # Save to BOTH Supabase AND memory cache
     set_user_lang(user_id, lang)
     context.user_data['lang'] = lang
-    
     try:
         await query.edit_message_text(t("lang_set", lang), parse_mode='Markdown')
     except:
         pass
-    
-    # Show main menu in the new language
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
         [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
         [InlineKeyboardButton(t("btn_deposit", lang), callback_data='deposit')],
         [InlineKeyboardButton(t("btn_faq", lang), callback_data='faq')],
         [InlineKeyboardButton(t("btn_human", lang), callback_data='human')],
+        [InlineKeyboardButton(t("btn_channel", lang), url=TELEGRAM_CHANNEL)],
         [InlineKeyboardButton(t("btn_changelang", lang), callback_data='changelang')]
     ]
-    await query.message.reply_text(
-        t("welcome", lang),
-        reply_markup=InlineKeyboardMarkup(keyboard)
-    )
+    await query.message.reply_text(t("welcome", lang), reply_markup=InlineKeyboardMarkup(keyboard))
     return ASK_GAME_ID
 
 # ==========================================
@@ -227,18 +251,17 @@ async def set_language(update: Update, context: ContextTypes.DEFAULT_TYPE) -> in
 async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user_id = update.effective_user.id if update.effective_user else update.callback_query.from_user.id
     lang = get_cached_lang(context, user_id)
-    
     keyboard = [
         [InlineKeyboardButton(t("btn_gift", lang), callback_data='gift')],
         [InlineKeyboardButton(t("btn_referral", lang), callback_data='referral')],
         [InlineKeyboardButton(t("btn_deposit", lang), callback_data='deposit')],
         [InlineKeyboardButton(t("btn_faq", lang), callback_data='faq')],
         [InlineKeyboardButton(t("btn_human", lang), callback_data='human')],
+        [InlineKeyboardButton(t("btn_channel", lang), url=TELEGRAM_CHANNEL)],
         [InlineKeyboardButton(t("btn_changelang", lang), callback_data='changelang')]
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     welcome_text = t("welcome", lang)
-    
     if update.message:
         await update.message.reply_text(welcome_text, reply_markup=reply_markup)
     elif update.callback_query:
@@ -251,13 +274,10 @@ async def main_menu(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     user = update.effective_user
     is_new = save_user(user.id, user.username, user.first_name)
-    
-    # Load language into cache
     context.user_data['lang'] = get_user_lang(user.id)
-    
     if is_new:
         await log_to_channel(context.bot,
-            f"🆕 *NEW USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
+            f"🆕 *NEW BDG USER*\n\n👤 {user.first_name}\n📛 @{user.username if user.username else 'N/A'}\n🆔 `{user.id}`\n👥 Total: `{count_users()}`")
         return await language_selection(update, context)
     return await main_menu(update, context)
 
@@ -265,7 +285,7 @@ async def language_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -
     return await language_selection(update, context)
 
 # ==========================================
-# KEYWORD AUTO-REPLY
+# KEYWORDS
 # ==========================================
 async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     if not update.message or not update.message.text:
@@ -275,7 +295,6 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
     lang = get_cached_lang(context, user.id)
     save_user(user.id, user.username, user.first_name)
     admin = ADMIN_ID
-    
     if "otp" in text:
         reply = f"📩 *{t('kw_otp_title', lang)}*\n\n{t('kw_otp_body', lang, admin=admin)}"
     elif "password" in text:
@@ -296,15 +315,15 @@ async def keyword_auto_reply(update: Update, context: ContextTypes.DEFAULT_TYPE)
         keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
         await update.message.reply_text(t("kw_unknown", lang), reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return
-    
     keyboard = [
         [InlineKeyboardButton(t("btn_contact", lang), url=f"https://t.me/{admin.replace('@', '')}")],
+        [InlineKeyboardButton(t("btn_channel", lang), url=TELEGRAM_CHANNEL)],
         [InlineKeyboardButton(t("btn_back", lang), callback_data='back')]
     ]
     await update.message.reply_text(reply, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
 
 # ==========================================
-# ADMIN COMMANDS
+# ADMIN
 # ==========================================
 async def broadcast_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     if update.effective_user.id != ADMIN_NUMERIC_ID:
@@ -337,9 +356,10 @@ async def stats_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> N
     if update.effective_user.id != ADMIN_NUMERIC_ID:
         await update.message.reply_text("❌ Not authorized.")
         return
-    text = (f"📊 *Bot Statistics*\n\n"
+    text = (f"📊 *BDG Game Bot Statistics*\n\n"
             f"👥 Total Users: `{count_users()}`\n"
             f"🎁 Gift Code: `{TODAY_GIFT_CODE}`\n"
+            f"🔑 Invite Code: `{INVITE_CODE}`\n"
             f"💾 Database: Supabase (Permanent)\n"
             f"🌍 Languages: EN / HI / TE\n"
             f"⚡ Status: Online 24/7")
@@ -375,10 +395,10 @@ async def receive_team_status(update: Update, context: ContextTypes.DEFAULT_TYPE
     game_id = context.user_data.get('game_id', '?')
     if query.data == 'team_yes':
         text = t("gift_verified", lang, admin=ADMIN_ID, id=game_id)
-        await log_to_channel(context.bot, f"✅ Gift Claim\n👤 {user.first_name}\n🆔 `{game_id}`")
+        await log_to_channel(context.bot, f"✅ BDG Gift Claim\n👤 {user.first_name}\n🆔 `{game_id}`")
     else:
         text = t("gift_not_reg", lang, link=REGISTER_LINK)
-        await log_to_channel(context.bot, f"❌ Unregistered\n👤 {user.first_name}")
+        await log_to_channel(context.bot, f"❌ BDG Unregistered\n👤 {user.first_name}")
     keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
     await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
     return ConversationHandler.END
@@ -443,34 +463,29 @@ async def receive_human_issue(update: Update, context: ContextTypes.DEFAULT_TYPE
     await log_to_channel(context.bot, f"💬 HUMAN REQUEST\n👤 {user.first_name}\n📝 {user_data}")
     return ConversationHandler.END
 
-# ==========================================
-# BUTTON CLICK (Handles all menu buttons)
-# ==========================================
 async def button_click(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     lang = get_cached_lang(context, user_id)
     data = query.data
-    
     if data == 'changelang':
         return await language_selection(update, context)
-    
     elif data == 'referral':
         text = t("referral", lang, link=REGISTER_LINK)
-        keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
+        keyboard = [
+            [InlineKeyboardButton(t("btn_channel", lang), url=TELEGRAM_CHANNEL)],
+            [InlineKeyboardButton(t("btn_back", lang), callback_data='back')]
+        ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ASK_GAME_ID
-    
     elif data == 'faq':
         text = t("faq", lang)
         keyboard = [[InlineKeyboardButton(t("btn_back", lang), callback_data='back')]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(keyboard), parse_mode='Markdown')
         return ASK_GAME_ID
-    
     elif data == 'back':
         return await main_menu(update, context)
-    
     return ASK_GAME_ID
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
@@ -482,13 +497,11 @@ async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE) -> int:
 if __name__ == '__main__':
     threading.Thread(target=run_web_server, daemon=True).start()
     app_bot = ApplicationBuilder().token(TOKEN).build()
-    
     broadcast_conv = ConversationHandler(
         entry_points=[CommandHandler('broadcast', broadcast_command)],
         states={BROADCAST_MSG: [MessageHandler(filters.ALL & ~filters.COMMAND, send_broadcast)]},
         fallbacks=[CommandHandler('cancel', cancel)],
     )
-    
     main_conv = ConversationHandler(
         entry_points=[
             CommandHandler('start', start),
@@ -522,7 +535,6 @@ if __name__ == '__main__':
             CallbackQueryHandler(button_click),
         ],
     )
-    
     app_bot.add_handler(CommandHandler("start", start))
     app_bot.add_handler(CommandHandler("language", language_command))
     app_bot.add_handler(CommandHandler("stats", stats_command))
@@ -530,6 +542,5 @@ if __name__ == '__main__':
     app_bot.add_handler(main_conv)
     app_bot.add_handler(CallbackQueryHandler(button_click))
     app_bot.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, keyword_auto_reply))
-    
-    print("Bot running with Supabase + 3 languages!")
+    print("BDG Game Bot running 24/7...")
     app_bot.run_polling()
